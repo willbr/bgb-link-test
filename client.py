@@ -16,9 +16,8 @@ class joy(IntEnum):
     START = 7
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-server_address = ('localhost', 8765)
-sock.connect(server_address)
+sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+sock.connect(('localhost', 8765))
 
 timestamp = 0
 
