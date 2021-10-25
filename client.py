@@ -69,6 +69,16 @@ try:
     # press_joy(joy.LEFT)
     # press_joy(joy.RIGHT)
 
+def bitflags(byte):
+    f0 = (byte & 0b00000001) != 0
+    f1 = (byte & 0b00000010) != 0
+    f2 = (byte & 0b00000100) != 0
+    f3 = (byte & 0b00001000) != 0
+    f4 = (byte & 0b00010000) != 0
+    f5 = (byte & 0b00100000) != 0
+    f6 = (byte & 0b01000000) != 0
+    f7 = (byte & 0b10000000) != 0
+    return f7, f6, f5, f4, f3, f2, f1, f0
     # press_joy(joy.START)
     # press_joy(joy.SELECT)
     # press_joy(joy.A)
