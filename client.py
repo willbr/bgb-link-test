@@ -34,7 +34,7 @@ def next():
 def send(cmd, b2, b3, b4):
     data = struct.pack("<BBBBI", cmd, b2, b3, b4, timestamp)
     #print(f"sending {data=}")
-    print(f"\tsending {cmd=} {b2=} {b3=} {b4=}")
+    #print(f"\tsending {cmd=} {b2=} {b3=} {b4=}")
     cnt = sock.send(data)
     assert cnt == 8
 
@@ -93,6 +93,7 @@ try:
     #send(105, 64, 0, 0)
     #click_joy(joy.B)
 
+    chars = []
     while 1:
         r = next()
 
@@ -107,19 +108,31 @@ try:
         if cmd == 1: # version
             print("version", r)
         elif cmd == 101: # joypad
-            print("joypad", r)
+            #print("joypad", r)
+            pass
         elif cmd == 104: # sync 1, send a byte as master
-            print("sync1")
+            #print(f"sync1 {b2=}")
             f7, f6, f5, f4, f3, double_speed, high_speed, f0 = bitflags(b3)
-            print(f"{double_speed=} {high_speed=}")
+            #print(f"{double_speed=} {high_speed=}")
+            if b2 == 0:
+                word = bytearray(chars).decode()
+                print(word)
+                chars = []
+            else:
+                chars.append(b2)
+
+            send(105, 0x55, 0x80, 0) # send data
+            #send(106, 1, 0, 0) # ack
+
         elif cmd == 105: # sync 2, send a byte as slave
             print("sync2", r)
-            send(*r)
+            pass
         elif cmd == 106: # sync 3, reply or sync
-            print("sync3", r)
+            #print("sync3", r)
+            send(*r)
         elif cmd == 108: # status
             *_, supportreconnect, paused, running = bitflags(b2)
-            print(f"{supportreconnect=} {paused=} {running=}")
+            #print(f"{supportreconnect=} {paused=} {running=}")
             send(*r)
         elif cmd == 109: # wantdisconnect
             print("wantdisconnect", r)
