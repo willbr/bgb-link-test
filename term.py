@@ -1,5 +1,6 @@
 # https://bgb.bircd.org/bgblink.html
 
+from dataclasses import dataclass
 from multiprocessing import Process, Pipe
 from struct import pack, unpack
 from enum import IntEnum
@@ -26,11 +27,42 @@ class joy(IntEnum):
     start  = 7
 
 
+@dataclass
+class BGBMessage:
+    cmd: int = 0
+    b2:  int = 0
+    b3:  int = 0
+    b4:  int = 0
+
+    def __repr__(self):
+        return "asdf"
+
+    def __str__(self):
+        if self.cmd == bgb_cmd.version:
+            return f"version {self.b2}.{self.b3}"
+        elif self.cmd == bgb_cmd.joypad:
+            return f"joypad {str(joy(self.b2))}"
+        elif self.cmd == bgb_cmd.sync1:
+            return f"sync1 ${self.b2:x}"
+        elif self.cmd == bgb_cmd.sync2:
+            return f"sync2 ${self.b2:x}"
+        elif self.cmd == bgb_cmd.sync3:
+            if self.b2:
+                return "sync3 ack"
+            else:
+                return "sync3 sync"
+        elif self.cmd == bgb_cmd.status:
+            running           = self.b2 & 0b001
+            paused            = self.b2 & 0b010
+            support_reconnect = self.b2 & 0b100
+            return f"status: {running=} {paused=} {support_reconnect=}"
+        else:
+            return f"unknown: ${cmd:x} ${b2:x} ${b3:x} ${b4:x}"
+
+
 sock = None
-reply = None
 timestamp = 0
 remote_timestamp = 0
-cmd = b2 = b3 = b4 = 0
 
 
 def init():
@@ -40,56 +72,34 @@ def init():
     sock.connect(('localhost', 8765))
 
 
-def send(s1, s2, s3, s4):
-    global cmd, b2, b3, b4
-    cmd, b2, b3, b4 = s1, s2, s3, s4
-    data = pack("<BBBBI", cmd, b2, b3, b4, timestamp)
-    # if cmd not in [bgb_cmd.status]:
-        # print(' s', msgstr(cmd, b2, b3, b4))
-    print(' s', msgstr())
+def send(msg):
+    data = pack("<BBBBI", msg.cmd, msg.b2, msg.b3, msg.b4, timestamp)
+    print(' s', msg)
     cnt = sock.send(data)
     assert cnt == 8
 
 
+def send_msg(cmd, b2, b3, b4):
+    send(BGBMessage(cmd, b2, b3, b4))
+
+
 def recv():
-    global reply, remote_timestamp
-    global cmd, b2, b3, b4
+    global remote_timestamp
 
     data = sock.recv(8)
     if len(data) == 0:
-        return True
+        return None
 
     *reply, remote_timestamp = unpack("<BBBBI", data)
-    cmd, b2, b3, b4 = reply
-    if cmd not in [bgb_cmd.sync3]:
-        print('r', msgstr())
+    msg = BGBMessage(*reply)
+    if msg.cmd not in [bgb_cmd.sync3]:
+        print('r', msg)
 
-
-def msgstr():
-    if cmd == bgb_cmd.version:
-        return f"version {b2}.{b3}"
-    elif cmd == bgb_cmd.joypad:
-        return f"joypad {str(joy(b2))}"
-    elif cmd == bgb_cmd.sync1:
-        return f"sync1 ${b2:x}"
-    elif cmd == bgb_cmd.sync2:
-        return f"sync2 ${b2:x}"
-    elif cmd == bgb_cmd.sync3:
-        if b2:
-            return "sync3 ack"
-        else:
-            return "sync3 sync"
-    elif cmd == bgb_cmd.status:
-        running           = b2 & 0b001
-        paused            = b2 & 0b010
-        support_reconnect = b2 & 0b100
-        return f"status: {running=} {paused=} {support_reconnect=}"
-    else:
-        return f"unknown: {reply=}"
+    return msg
 
 
 def parse_stdio(msg):
-    return bgb_cmd.sync1, 0xff, 0b1000_0001, 0
+    return BGBMessage(bgb_cmd.sync1, 0xff, 0b1000_0001, 0)
 
 
 def link_client(conn):
@@ -99,18 +109,21 @@ def link_client(conn):
     while True:
         if conn.poll():
             msg = conn.recv()
-            send(*parse_stdio(msg))
+            send(parse_stdio(msg))
             #conn.send(['hi', msg])
 
-        if recv():
+        msg = recv()
+        if msg == None:
             continue
 
+        cmd = msg.cmd
+
         if cmd == bgb_cmd.version:
-            send(bgb_cmd.version, 1, 4, 0)
+            send_msg(bgb_cmd.version, 1, 4, 0)
         elif cmd == bgb_cmd.joypad:
             pass
         elif cmd == bgb_cmd.status:
-            send(cmd, b2, b3, b4)
+            send(msg)
         elif cmd == bgb_cmd.sync1:
             pass
         elif cmd == bgb_cmd.sync2:
@@ -127,7 +140,6 @@ def link_client(conn):
 
 
 def main():
-
     parent_conn, child_conn = Pipe()
     p = Process(target=link_client, args=(child_conn,))
     p.start()
@@ -139,8 +151,5 @@ def main():
     # p.join()
 
 if __name__ == '__main__':
-    try:
-        main()
-    except KeyboardInterrupt:
-        exit(0)
+    main()
 
