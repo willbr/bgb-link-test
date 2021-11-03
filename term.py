@@ -9,8 +9,6 @@ import socket
 
 sock = None
 timestamp = 0
-remote_timestamp = 0
-
 
 class bgb_cmd(IntEnum):
     version = 1   # 0x01
@@ -110,13 +108,16 @@ def send_msg(cmd, b2=None, b3=None, b4=None):
 
 
 def recv():
-    global remote_timestamp
+    global timestamp
 
     data = sock.recv(8)
     if len(data) == 0:
         return None
 
-    *reply, remote_timestamp = unpack("<BBBBI", data)
+    *reply, i1 = unpack("<BBBBI", data)
+    if i1:
+        timestamp = i1 + 1
+        timestamp &= 0b_01111111_11111111_11111111_11111111
     msg = BGBMessage(*reply)
     if msg.cmd not in [bgb_cmd.sync3, bgb_cmd.joypad]:
         print(' r', msg)
@@ -125,29 +126,33 @@ def recv():
 
 
 def link_client(conn):
-    global timestamp
-
     init()
     msgs = []
-    buffer = []
+    send_buffer = []
+    recv_buffer = []
     ready = True
+    retry = False
+    c = None
 
     while True:
-
         if conn.poll():
-            print(f"{buffer=} {msgs=} {ready=}")
             line = conn.recv()
-            print(f"{line=}")
             msgs.append(line)
+            print(f"{send_buffer=} {msgs=} {ready=}")
 
-        if buffer and ready:
-            c = buffer.pop(0)
-            print(f"{c=} {buffer=} {msgs=} {ready=}")
+        if retry:
+            print(f"{c=} {send_buffer=} {msgs=} {ready=}")
+            send_msg(bgb_cmd.sync1, c)
+            retry = False
+        elif send_buffer and ready:
+            c = send_buffer.pop(0)
+            print(f"{c=} {send_buffer=} {msgs=} {ready=}")
             send_msg(bgb_cmd.sync1, c)
             ready = False
-        elif len(buffer) == 0 and msgs:
+        elif len(send_buffer) == 0 and msgs:
             line = msgs.pop(0)
-            buffer = list(line.encode()) + [0]
+            send_buffer = list(line.encode()) + [0]
+            print(f"{send_buffer=}")
 
         msg = recv()
         if msg == None:
@@ -156,18 +161,26 @@ def link_client(conn):
         cmd = msg.cmd
 
         if cmd == bgb_cmd.version:
-            send_msg(bgb_cmd.version, 1, 4, 0)
+            send_msg(bgb_cmd.version, 1, 4)
         elif cmd == bgb_cmd.joypad:
             pass
         elif cmd == bgb_cmd.status:
             send(msg)
         elif cmd == bgb_cmd.sync1:
+            if msg.b2 == 0:
+                line = bytearray(recv_buffer).decode('ascii')
+                recv_buffer = []
+                print(line)
+            else:
+                recv_buffer.append(msg.b2)
             send_msg(bgb_cmd.sync2)
         elif cmd == bgb_cmd.sync2:
-            ready = True
+            if msg.b2 == 0x66:
+                retry = True
+            else:
+                retry = False
+                ready = True
         elif cmd == bgb_cmd.sync3:
-            if msg.b2 == 0:
-                timestamp = remote_timestamp
             send(msg)
         else:
             print('r', msg)
