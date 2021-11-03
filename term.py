@@ -52,9 +52,9 @@ class BGBMessage:
             pressed = self.b2 & 0b1000
             return f"joypad {str(joy(self.b2))} {pressed=}"
         elif self.cmd == bgb_cmd.sync1:
-            return f"sync1 ${self.b2:x}"
+            return f"sync1 ${self.b2:x}, {self.b2}, {escape(self.b2)}"
         elif self.cmd == bgb_cmd.sync2:
-            return f"sync2 ${self.b2:x}"
+            return f"sync2 ${self.b2:x}, {self.b2}, {escape(self.b2)}"
         elif self.cmd == bgb_cmd.sync3:
             if self.b2:
                 return "sync3 ack"
@@ -68,6 +68,10 @@ class BGBMessage:
         else:
             return f"unknown: ${cmd:x} ${b2:x} ${b3:x} ${b4:x}"
 
+
+def escape(i):
+    c = chr(i)
+    return c
 
 def init():
     global sock
