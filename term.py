@@ -175,11 +175,12 @@ def main():
     p = Process(target=link_client, args=(child_conn,))
     p.start()
 
-    while True:
-        line = input("# ")
-        parent_conn.send(line)
-
-    p.join()
+    try:
+        while True:
+            line = input("# ")
+            parent_conn.send(line)
+    except KeyboardInterrupt:
+        p.terminate()
 
 
 if __name__ == '__main__':
