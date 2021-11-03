@@ -89,7 +89,7 @@ def send_msg(cmd, b2=None, b3=None, b4=None):
     if cmd == bgb_cmd.sync1:
         if b3 == None:
             b3 = 0x81
-    elif cmd == bgb_cmd.sync1:
+    elif cmd == bgb_cmd.sync2:
         if b2 == None:
             b2 = 0x55
         if b3 == None:
