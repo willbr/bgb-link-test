@@ -7,17 +7,18 @@ import socket
 
 
 pipe = None
+log  = None
 sock = None
 timestamp = 0
 
 class bgb_cmd(IntEnum):
-    version = 1   # 0x01
-    joypad  = 101 # 0x65
-    sync1   = 104 # 0x68
-    sync2   = 105 # 0x69
-    sync3   = 106 # 0x6a
-    status  = 108 # 0x6c
-    want    = 109 # 0x6d
+    version    = 1   # 0x01
+    joypad     = 101 # 0x65
+    sync1      = 104 # 0x68
+    sync2      = 105 # 0x69
+    sync3      = 106 # 0x6a
+    status     = 108 # 0x6c
+    disconnect = 109 # 0x6d
 
 
 class joy(IntEnum):
@@ -63,8 +64,10 @@ class BGBMessage:
             paused            = self.b2 & 0b010
             support_reconnect = self.b2 & 0b100
             return f"status: {running=} {paused=} {support_reconnect=}"
+        elif self.cmd == bgb_cmd.disconnect:
+            return f"disconnect"
         else:
-            return f"unknown: ${cmd:x} ${b2:x} ${b3:x} ${b4:x}"
+            return f"unknown: ${self.cmd:x} ${self.b2:x} ${self.b3:x} ${self.b4:x}"
 
 
 def escape(i):
@@ -81,7 +84,7 @@ def init():
 def send(msg):
     data = pack("<BBBBI", msg.cmd, msg.b2, msg.b3, msg.b4, timestamp)
     if msg.cmd not in [bgb_cmd.sync3]:
-        print('s', msg)
+        log.send(f"s {msg}")
     cnt = sock.send(data)
     assert cnt == 8
 
@@ -120,13 +123,16 @@ def recv():
         timestamp &= 0b_01111111_11111111_11111111_11111111
     msg = BGBMessage(*reply)
     if msg.cmd not in [bgb_cmd.sync3, bgb_cmd.joypad]:
-        print(' r', msg)
+        log.send(f" r {msg}")
 
     return msg
 
 
-def link_client(conn):
-    pipe = conn
+def link_client(main_pipe, log_pipe):
+    global pipe, log
+
+    pipe = main_pipe
+    log  = log_pipe
 
     try:
         init()
@@ -134,32 +140,32 @@ def link_client(conn):
     except ConnectionRefusedError as e:
         pipe.send(f"failed to connect: {e}")
         return
+
     msgs = []
     send_buffer = []
     recv_buffer = []
-    ready = True
-    retry = False
+    state = "ready"
     c = None
 
     while True:
         if pipe.poll():
             line = pipe.recv()
             msgs.append(line)
-            print(f"{send_buffer=} {msgs=} {ready=}")
+            log.send(f"{send_buffer=} {msgs=} {state=}")
 
-        if retry:
-            print(f"{c=} {send_buffer=} {msgs=} {ready=}")
+        if state == "retry":
+            log.send(f"{c=} {send_buffer=} {msgs=} {state=}")
             send_msg(bgb_cmd.sync1, c)
-            retry = False
-        elif send_buffer and ready:
+            state = "listen"
+        elif send_buffer and state == "ready":
             c = send_buffer.pop(0)
-            print(f"{c=} {send_buffer=} {msgs=} {ready=}")
+            log.send(f"{c=} {send_buffer=} {msgs=} {state=}")
             send_msg(bgb_cmd.sync1, c)
-            ready = False
+            state = "listen"
         elif len(send_buffer) == 0 and msgs:
             line = msgs.pop(0)
             send_buffer = list(line.encode()) + [0]
-            print(f"{send_buffer=}")
+            log.send(f"{send_buffer=}")
 
         msg = recv()
         if msg == None:
@@ -177,20 +183,22 @@ def link_client(conn):
             if msg.b2 == 0:
                 line = bytearray(recv_buffer).decode('ascii')
                 recv_buffer = []
-                print(f"{line=}")
+                pipe.send(f"{line=}")
             else:
                 recv_buffer.append(msg.b2)
             send_msg(bgb_cmd.sync2)
         elif cmd == bgb_cmd.sync2:
             if msg.b2 == 0x66:
-                retry = True
+                state = "retry"
             else:
-                retry = False
-                ready = True
+                state = "ready"
         elif cmd == bgb_cmd.sync3:
             send(msg)
+        elif cmd == bgb_cmd.disconnect:
+            log.send("gameboy disconnected")
+            return
         else:
-            print('r', msg)
+            log.send(f"r {msg}")
             assert False, cmd
 
 

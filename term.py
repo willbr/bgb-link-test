@@ -10,22 +10,38 @@ def ere():
     print(i)
 
 
+def print_messages(pipe, prefix=""):
+    while pipe.poll():
+        reply = pipe.recv()
+        print(prefix, reply)
+
+
 def main():
-    parent_conn, child_conn = Pipe()
-    p = Process(target=link_client, args=(child_conn,))
+    main_pipe, child_main = Pipe()
+    log_pipe,  child_log = Pipe()
+
+    p = Process(target=link_client, args=(child_main, child_log))
     p.start()
 
-    msg = parent_conn.recv()
+    msg = main_pipe.recv()
     if msg != "connected":
         print(msg)
         exit(1)
 
     try:
         while True and p.is_alive():
+            print_messages(main_pipe)
+            print_messages(log_pipe, ">")
+
             line = input("# ")
-            parent_conn.send(line)
+            if line:
+                main_pipe.send(line)
+
     except KeyboardInterrupt:
         p.terminate()
+
+    print_messages(main_pipe)
+    print_messages(log_pipe, ">")
 
 
 if __name__ == '__main__':
