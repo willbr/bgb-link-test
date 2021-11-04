@@ -12,7 +12,7 @@ class MsgApp:
         self.root = root
 
         root.title('GB Messages')
-        root.geometry('500x400')
+        root.geometry('800x600')
 
         pw = PanedWindow(orient=HORIZONTAL)
 
@@ -24,7 +24,7 @@ class MsgApp:
         lhs_sub = Frame(lhs)
         lhs_sub.pack(side=TOP, expand=True, fill=BOTH)
 
-        self.msgs = left_list = Listbox(lhs_sub)
+        self.msgs = left_list = Listbox(lhs_sub, font=('Consolas', 15, 'bold'))
         left_list.pack(side=LEFT, expand=True, fill=BOTH)
 
         left_scroll = Scrollbar(lhs_sub)
@@ -34,7 +34,7 @@ class MsgApp:
         left_scroll.config(command=left_list.yview)
 
         self.input_text = StringVar()
-        textbox = Entry(lhs, textvariable=self.input_text, font=('arial', 15, 'bold'))
+        textbox = Entry(lhs, textvariable=self.input_text, font=('Consolas', 15, 'bold'))
         textbox.pack(side=BOTTOM, fill=X)
         textbox.focus()
 
@@ -46,7 +46,7 @@ class MsgApp:
         rhs = Frame(root)
         rhs.pack(side=RIGHT)
 
-        self.logs = right_list = Listbox(rhs)
+        self.logs = right_list = Listbox(rhs, font=('Consolas', 15, 'bold'))
         right_list.pack(side=LEFT, expand=True, fill=BOTH)
 
         right_scroll = Scrollbar(rhs)
@@ -89,23 +89,20 @@ class MsgApp:
         while self.log_pipe.poll():
             line = self.log_pipe.recv()
             self.logs.insert(END, line)
+            self.logs.yview(END)
 
         while self.main_pipe.poll():
             line = self.main_pipe.recv()
             self.msgs.insert(END, f"remote: {line}")
+            self.msgs.yview(END)
 
         # self.root.after(POLL_FREQ, self.poll_client)
 
 
     def send_msg(self, e):
-        print(f"{self.p.is_alive()}")
-        if not self.p.is_alive():
-            self.connect()
-            if not self.p.is_alive():
-                return
-
         msg = self.input_text.get()
         self.msgs.insert(END, f"local: {msg}")
+        self.msgs.yview(END)
         self.main_pipe.send(msg)
         self.input_text.set("")
 
