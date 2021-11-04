@@ -3,10 +3,10 @@
 from dataclasses import dataclass
 from struct import pack, unpack
 from enum import IntEnum
+from time import sleep
 import socket
 
 
-pipe = None
 log  = None
 sock = None
 timestamp = 0
@@ -114,7 +114,7 @@ def recv():
     global timestamp
 
     data = sock.recv(8)
-    if len(data) == 0:
+    if not data:
         return None
 
     *reply, i1 = unpack("<BBBBI", data)
@@ -128,10 +128,8 @@ def recv():
     return msg
 
 
-def link_client(main_pipe, log_pipe):
-    global pipe, log
-
-    pipe = main_pipe
+def link_client(pipe, log_pipe):
+    global log
     log  = log_pipe
 
     try:
@@ -139,6 +137,7 @@ def link_client(main_pipe, log_pipe):
         pipe.send("connected")
     except ConnectionRefusedError as e:
         pipe.send(f"failed to connect: {e}")
+        pipe.recv()
         return
 
     msgs = []

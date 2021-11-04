@@ -1,10 +1,11 @@
 from tkinter import *
 from tkinter.ttk import *
+from bgb_link import *
 
 from ctypes import windll
 from multiprocessing import Process, Pipe
-from time import sleep
 
+POLL_FREQ = 100 # ms
 
 class MsgApp:
     def __init__(self, root):
@@ -60,62 +61,61 @@ class MsgApp:
 
         pw.pack(fill=BOTH, expand=True)
 
-        self.main_pipe, child_main = Pipe()
-        self.log_pipe,  child_log = Pipe()
+        self.main_pipe, self.child_main = Pipe()
+        self.log_pipe,  self.child_log = Pipe()
 
-        self.p = p = Process(target=link_client, args=(child_main, child_log))
+        self.connect()
+
+        root.after(POLL_FREQ, self.poll_client)
+
+
+    def connect(self):
+        self.p = p = Process(target=link_client, args=(self.child_main, self.child_log))
         p.start()
 
-        root.after(100, self.poll_client)
+        msg = self.main_pipe.recv()
+        self.logs.insert(END, msg)
 
-
-    def __enter__(self):
-        print("enter?")
-
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        print("exit?")
-
-
-    def __del__(self):
-        print("die?")
-        self.p.terminate()
+        if msg != "connected":
+            self.main_pipe.send("ok")
 
 
     def poll_client(self):
+        self.root.after(POLL_FREQ, self.poll_client)
+
+        if not self.p.is_alive():
+            return
+
         while self.log_pipe.poll():
             line = self.log_pipe.recv()
             self.logs.insert(END, line)
 
         while self.main_pipe.poll():
             line = self.main_pipe.recv()
-            self.msgs.insert(END, line)
+            self.msgs.insert(END, f"remote: {line}")
 
-        self.root.after(100, self.poll_client)
+        # self.root.after(POLL_FREQ, self.poll_client)
 
 
     def send_msg(self, e):
-        print(f"msg {self.input_text.get()}")
+        print(f"{self.p.is_alive()}")
+        if not self.p.is_alive():
+            self.connect()
+            if not self.p.is_alive():
+                return
+
+        msg = self.input_text.get()
+        self.msgs.insert(END, f"local: {msg}")
+        self.main_pipe.send(msg)
         self.input_text.set("")
-
-
-def link_client(main, log):
-    while True:
-        main.send("hi main")
-        sleep(1)
-        log.send("hi log")
-        sleep(1)
-        log.send("bye log")
-        sleep(1)
-        main.send("bye main")
-        sleep(2)
 
 
 def main():
     root = Tk()
-    with MsgApp(root) as app:
-        root.after(10_000, root.destroy)
-        root.mainloop()
+    app = MsgApp(root)
+    # root.after(10_000, root.destroy)
+    root.mainloop() 
+    app.p.terminate()
 
 
 if __name__ == "__main__":
