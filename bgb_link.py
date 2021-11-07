@@ -56,6 +56,30 @@ class BGBMessage:
     b4:  int = 0
     i1:  int = 0
 
+    def __init__(self, cmd, b2=None, b3=None, b4=None, i1=None):
+
+        if cmd == bgb_cmd.sync1:
+            if b3 == None:
+                b3 = 0x81
+        elif cmd == bgb_cmd.sync2:
+            if b2 == None:
+                b2 = 0x55
+            if b3 == None:
+                b3 = 0x80
+
+        if b2 == None:
+            b2 = 0
+        if b3 == None:
+            b3 = 0
+        if b4 == None:
+            b4 = 0
+
+        self.cmd = cmd
+        self.b2  = b2
+        self.b3  = b3
+        self.b4  = b4
+        self.i1  = i1
+
 
     def __repr__(self):
         return str(self)
@@ -68,9 +92,9 @@ class BGBMessage:
             pressed = self.b2 & 0b1000
             return f"joypad {str(joy(self.b2))} {pressed=}"
         elif self.cmd == bgb_cmd.sync1:
-            return f"sync1 ${self.b2:x}, {self.b2:3d}, {escape(self.b2)}"
+            return f"sync1 ${self.b2:02x}, {self.b2:3d}, {escape(self.b2)}"
         elif self.cmd == bgb_cmd.sync2:
-            return f"sync2 ${self.b2:x}, {self.b2:3d}, {escape(self.b2)}"
+            return f"sync2 ${self.b2:02x}, {self.b2:3d}, {escape(self.b2)}"
         elif self.cmd == bgb_cmd.sync3:
             if self.b2:
                 return "sync3 ack"
@@ -88,11 +112,7 @@ class BGBMessage:
 
 
 def escape(i):
-    if i == 0:
-        c = '\\0'
-    else:
-        c = chr(i)
-    return c
+    return repr(chr(i))
 
 def init():
     global sock
@@ -117,23 +137,6 @@ def send(msg):
 
 
 def send_msg(cmd, b2=None, b3=None, b4=None):
-
-    if cmd == bgb_cmd.sync1:
-        if b3 == None:
-            b3 = 0x81
-    elif cmd == bgb_cmd.sync2:
-        if b2 == None:
-            b2 = 0x55
-        if b3 == None:
-            b3 = 0x80
-
-    if b2 == None:
-        b2 = 0
-    if b3 == None:
-        b3 = 0
-    if b4 == None:
-        b4 = 0
-
     send(BGBMessage(cmd, b2, b3, b4))
 
 

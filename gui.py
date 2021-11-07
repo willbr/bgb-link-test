@@ -1,6 +1,7 @@
 from tkinter import *
 from tkinter.ttk import *
 from bgb_link import *
+from atest import *
 
 from ctypes import windll
 from multiprocessing import Process, Pipe
@@ -70,7 +71,7 @@ class MsgApp:
 
 
     def connect(self):
-        self.p = p = Process(target=link_client, args=(self.child_main, self.child_log))
+        self.p = p = Process(target=link_gui, args=(self.child_main, self.child_log))
         p.start()
 
         msg = self.main_pipe.recv()
