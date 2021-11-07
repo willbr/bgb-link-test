@@ -54,7 +54,7 @@ class BGBConnection:
         msg = BGBMessage(*reply)
 
         if msg.cmd not in [bgb_cmd.sync3, bgb_cmd.joypad]:
-            self.log('r', self.state, msg)
+            self.log('r', f"{self.state:9s}", msg)
 
         return msg
 
