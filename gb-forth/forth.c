@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "forth.h"
 
-void
+int
 main(void)
 {
     init();
@@ -11,7 +11,8 @@ main(void)
     while (1) {
         if (!str_cmp(token, "")) {
             printf("# ");
-            gets(tib);
+            if (fgets(tib, 64, stdin) == NULL)
+                return 0;
             in = tib;
             /*printf("tib: %s\n", tib);*/
         }
