@@ -328,7 +328,7 @@ next_token(void)
 
     start_pos = in;
 
-    while (*in != '\0' && *in != ' ')
+    while (*in != '\0' && *in != ' ' && *in != '\n')
         *t++ = *in++;
 
     *t = '\0';
