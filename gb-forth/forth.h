@@ -9,6 +9,7 @@ struct dict_elem {
     char *name;
     c_func *fn;
     struct dict_elem *next ;
+    u16 *code;
 };
 
 
@@ -28,6 +29,7 @@ void eval(const char * const token);
 
 void push_param(u16 s);
 u16  pop_param(void);
+u16  tos(void);
 
 void die2(const char * const msg, const char * const file_name, const int line_number, const char * const func_name);
 #define die(msg) die2(msg, __FILE__, __LINE__, __func__)
@@ -52,6 +54,8 @@ void fn_div(void);
 void fn_print(void);
 void fn_print_stack(void);
 
+void fn_dup(void);
+
 
 void
 init(void)
@@ -66,6 +70,8 @@ init(void)
     define("/",  fn_div);
     define(".",  fn_print);
     define(".s", fn_print_stack);
+
+    define("dup", fn_dup);
 
     /*print_dictionary();*/
 }
@@ -317,6 +323,13 @@ fn_print_stack(void)
 }
 
 
+void
+fn_dup(void)
+{
+    push_param(tos());
+}
+
+
 u8
 next_token(void)
 {
@@ -333,6 +346,15 @@ next_token(void)
 
     *t = '\0';
     return start_pos != in;
+}
+
+
+u16
+tos(void)
+{
+    if (param_ptr <= param_stack)
+        die("stack underflow");
+    return *(param_ptr - 1);
 }
 
 
