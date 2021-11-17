@@ -99,8 +99,10 @@ eval(const char * const token)
     }
 
     elem = lookup(token);
-    if (elem == NULL)
+    if (elem == NULL) {
+        fprintf(stderr, "token: '%s'\n", token);
         die("word not found");
+    }
 
     /*printf("dict elem: %s\n", elem->name);*/
 
