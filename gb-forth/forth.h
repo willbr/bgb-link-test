@@ -1,5 +1,30 @@
-#include <stdint.h>
-#include <stdlib.h> // exit
+#include <stdint.h> /* uint8_t */
+#include <stdlib.h> /* exit */
+
+/*
+ *
+ *
+    create
+    does>
+    ,
+    allot
+    swap
+    immediate
+
+    if
+    then
+    do
+
+    loop
+    here
+
+    literal
+
+    ] colon compiler
+    [
+
+    postpone
+ */
 
 typedef void (c_func)(void);
 typedef uint8_t  u8;
@@ -51,10 +76,17 @@ void fn_add(void);
 void fn_sub(void);
 void fn_mult(void);
 void fn_div(void);
+
+void fn_emit(void);
 void fn_print(void);
 void fn_print_stack(void);
 
+void fn_colon(void);
+void fn_semicolon(void);
+
 void fn_dup(void);
+void fn_drop(void);
+void fn_swap(void);
 
 
 void
@@ -68,10 +100,17 @@ init(void)
     define("-",  fn_sub);
     define("*",  fn_mult);
     define("/",  fn_div);
-    define(".",  fn_print);
-    define(".s", fn_print_stack);
+
+    define("emit", fn_emit);
+    define(".",    fn_print);
+    define(".s",   fn_print_stack);
 
     define("dup", fn_dup);
+    define("drop", fn_drop);
+    define("swap", fn_swap);
+
+    define(":", fn_colon);
+    define(";", fn_semicolon);
 
     /*print_dictionary();*/
 }
@@ -142,6 +181,9 @@ push_param(u16 s)
 u16
 pop_param(void)
 {
+    if (param_ptr <= param_stack)
+        die("underflow");
+
     param_ptr -= 1;
     return *param_ptr;
 }
@@ -327,6 +369,43 @@ void
 fn_dup(void)
 {
     push_param(tos());
+}
+
+
+void
+fn_drop(void)
+{
+    pop_param();
+}
+
+
+void
+fn_swap(void)
+{
+    u16 temp1 = pop_param();
+    u16 temp2 = pop_param();
+    push_param(temp1);
+    push_param(temp2);
+}
+
+
+void
+fn_emit(void)
+{
+    putchar(pop_param() & 0xff);
+}
+
+
+void
+fn_colon(void)
+{
+    die("todo");
+}
+
+void
+fn_semicolon(void)
+{
+    die("todo");
 }
 
 
