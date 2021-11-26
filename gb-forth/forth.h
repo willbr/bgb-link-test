@@ -27,27 +27,41 @@
  */
 
 typedef void (c_func)(void);
+typedef unsigned int uint;
 typedef uint8_t  u8;
 typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
 
 struct dict_elem {
+    struct dict_elem *prev ;
     char *name;
+    u8 immediate;
     c_func *fn;
-    struct dict_elem *next ;
     u16 *code;
 };
 
 
-char memory[0x400] = {0};
+enum {
+    true  = -1,
+    false =  0
+};
 
-u16 *param_stack  = (u16*)&memory[0x300];
-char *tib           = NULL;
-char *in            = &memory[0x200];
-char token[64]     = {0};
 
-char *here         = &memory[0];
-struct dict_elem *dict = NULL;
+char memory[0x10000] = {0};
+
+u16 *param_stack = (u16*)&memory[0x5000];
+char *tib        = NULL;
+char *in         = NULL;
+char token[64]   = {0};
+
+char *here         = NULL;
+struct dict_elem *latest = NULL;
 u16 *param_ptr = NULL;
+u8 compiling   = false;
+
+u16 lit  = 0;
+u16 next = 0;
 
 void init(void);
 void eval(const char * const token);
@@ -56,11 +70,18 @@ void push_param(u16 s);
 u16  pop_param(void);
 u16  tos(void);
 
+#define ESC "\x1b"
+#define RED_TEXT "31"
+#define YELLOW_TEXT "33"
+#define RESET ESC "[0m"
+
 void die2(const char * const msg, const char * const file_name, const int line_number, const char * const func_name);
 #define die(msg) die2(msg, __FILE__, __LINE__, __func__)
+void ere2(const char * const file_name, const int line_number, const char * const func_name);
+#define ere ere2(__FILE__, __LINE__, __func__)
 
 struct dict_elem* lookup(const char *name);
-struct dict_elem* define(char *name, c_func *code);
+u16 define(char *name, c_func *code, u8 immediate);
 
 void* alloc(size_t size);
 char * alloc_string(const char const *value);
@@ -70,7 +91,10 @@ void str_cpy(char *dst, const char const *src);
 u8   str_cmp(const char const *s1, const char const *s2);
 u16  str_to_u16(const char *str, char **endptr);
 
+void decompile(struct dict_elem *elem);
 void print_dictionary(void);
+
+void fn_next(void);
 
 void fn_add(void);
 void fn_sub(void);
@@ -88,29 +112,42 @@ void fn_dup(void);
 void fn_drop(void);
 void fn_swap(void);
 
+void fn_lit(void);
+void fn_comma(void);
+
+u8 next_token(void);
+
 
 void
 init(void)
 {
     param_ptr = param_stack;
-    tib       = &memory[0x200];
-    in        = &memory[0x200];
+    here      = &memory[0x0000];
+    latest    = NULL;
+    tib       = &memory[0x4000];
+    in        = &memory[0x4000];
+    *in       = '\0';
 
-    define("+",  fn_add);
-    define("-",  fn_sub);
-    define("*",  fn_mult);
-    define("/",  fn_div);
+    define("next",  fn_next,  false);
 
-    define("emit", fn_emit);
-    define(".",    fn_print);
-    define(".s",   fn_print_stack);
+    define("+",  fn_add,  false);
+    define("-",  fn_sub,  false);
+    define("*",  fn_mult, false);
+    define("/",  fn_div,  false);
 
-    define("dup", fn_dup);
-    define("drop", fn_drop);
-    define("swap", fn_swap);
+    define("emit", fn_emit,        false);
+    define(".",    fn_print,       false);
+    define(".s",   fn_print_stack, false);
 
-    define(":", fn_colon);
-    define(";", fn_semicolon);
+    define("dup", fn_dup,   false);
+    define("drop", fn_drop, false);
+    define("swap", fn_swap, false);
+
+    lit = define("lit", fn_lit, false);
+    define(",",   fn_comma, false);
+
+    define(":", fn_colon,     false);
+    define(";", fn_semicolon, true);
 
     /*print_dictionary();*/
 }
@@ -124,7 +161,9 @@ eval(const char * const token)
     struct dict_elem *elem = NULL;
     c_func *fn = NULL;
 
-    /*printf("eval token: %s\n", token);*/
+    printf("%s: '%s'\n",
+            compiling ? "compile" : "eval",
+            token);
 
     if (*token == '\0')
         die("null char");
@@ -139,7 +178,15 @@ eval(const char * const token)
         die("endp is NULL");
 
     if (*endp == '\0') { 
-        push_param(s);
+        if (compiling) {
+            /*printf("%s\n", token);*/
+            push_param(lit);
+            fn_comma();
+            push_param(s);
+            fn_comma();
+        } else {
+            push_param(s);
+        }
         return;
     }
 
@@ -152,27 +199,53 @@ eval(const char * const token)
     /*printf("dict elem: %s\n", elem->name);*/
 
     fn = elem->fn;
-    if (fn == NULL)
-        die("missing function pointer");
 
-    fn();
+    if (compiling && !elem->immediate) {
+        ptrdiff_t poffset = (void*)elem - (void*)&memory[0];
+        u16 offset = poffset;
+        push_param(offset);
+        fn_comma();
+        return;
+    }
+
+    if (fn) {
+        fn();
+        return;
+    }
+
+    fprintf(stderr, "dict elem: %s\n", elem->name);
+
+    if (elem->code == NULL)
+        die("no code");
+
+    /*print_dictionary();*/
+    decompile(elem);
+    die("todo");
 }
 
 
 void
 die2(const char * const msg, const char * const file_name, const int source_line_number, const char * const func_name)
 {
-    printf("\nDIE: %s\n\n", msg);
-    /*fprintf(stderr, "%3d: %s", line_number, buffer);*/
-    /*fprintf(stderr, "     %*s^\n\n", i, "");*/
-    printf("%s : %d : %s\n\n", file_name, source_line_number, func_name);
+    fprintf(stderr, "\n" ESC "[" RED_TEXT "m" "DIE: %s\n\n", msg);
+    fprintf(stderr, "%s : %d : %s\n\n" RESET, file_name, source_line_number, func_name);
     exit(1);
+}
+
+
+void
+ere2(const char * const file_name, const int source_line_number, const char * const func_name)
+{
+    fprintf(stderr,
+            ESC "[" YELLOW_TEXT "m%s %d %s" RESET "\n",
+            func_name, source_line_number, file_name);
 }
 
 
 void
 push_param(u16 s)
 {
+    /*printf("pushing 0x%03x\n", s);*/
     *param_ptr = s;
     param_ptr += 1;
 }
@@ -185,6 +258,7 @@ pop_param(void)
         die("underflow");
 
     param_ptr -= 1;
+    /*printf("popping 0x%03x\n", *param_ptr);*/
     return *param_ptr;
 }
 
@@ -192,8 +266,8 @@ pop_param(void)
 struct dict_elem*
 lookup(const char *name)
 {
-    struct dict_elem *elem = dict;
-    /*printf("lookup: %s\n", name);*/
+    struct dict_elem *elem = latest;
+    /*printf("lookup: '%s'\n", name);*/
 
     while (elem) {
         /*printf("lookup elem: %p\n", elem);*/
@@ -205,26 +279,39 @@ lookup(const char *name)
         if (!str_cmp(elem->name, name))
             return elem;
 
-        elem = elem->next;
+        elem = elem->prev;
     }
 
+    puts("fail");
     return NULL;
 }
 
 
-struct dict_elem*
-define(char *name, c_func *fn)
+u16
+define(char *name, c_func *fn, u8 immediate)
 {
+    u16 offset = here - &memory[0];
     struct dict_elem *new = alloc(sizeof(struct dict_elem));
     char *new_name = alloc(str_len(name) + 1);
 
     str_cpy(new_name, name);
+    /*printf("define name: '%s'\n", name);*/
 
     new->name = new_name;
-    new->fn = fn;
-    new->next = dict;
+    new->prev = latest;
+    new->immediate = immediate;
 
-    return dict = new;
+    if (fn) {
+        new->fn = fn;
+        new->code = NULL;
+    } else {
+        new->fn = NULL;
+        new->code = (u16*)here;
+    }
+
+    latest = new;
+
+    return offset;
 }
 
 
@@ -303,6 +390,13 @@ str_to_u16(const char *str, char **endptr)
         return 0;
     else 
         return r;
+}
+
+
+void
+fn_next(void)
+{
+    return;
 }
 
 
@@ -390,6 +484,22 @@ fn_swap(void)
 
 
 void
+fn_lit(void)
+{
+    die("todo");
+}
+
+
+void
+fn_comma(void)
+{
+    u16 *a = (u16*)here;
+    *a++ = pop_param();
+    here = (u8*)a;
+}
+
+
+void
 fn_emit(void)
 {
     putchar(pop_param() & 0xff);
@@ -399,13 +509,18 @@ fn_emit(void)
 void
 fn_colon(void)
 {
-    die("todo");
+    next_token();
+    define(token, NULL, false);
+    compiling = true;
 }
+
 
 void
 fn_semicolon(void)
 {
-    die("todo");
+    push_param(next);
+    fn_comma();
+    compiling = false;
 }
 
 
@@ -415,7 +530,21 @@ next_token(void)
     char *t = token;
     char *start_pos = NULL;
 
-    while (*in == ' ')
+    if (!*in) {
+        if (fgets(in, 64, stdin) == NULL) {
+            if (*in == EOF)
+                die("EOF");
+            return 0;
+        }
+    }
+
+    /*printf("%p\n", in);*/
+    /*printf("%d\n", *in);*/
+    /*printf("%c\n", *in);*/
+    /*printf("%s\n", in);*/
+    /*die("todo");*/
+
+    while (*in == ' ' || *in == '\n')
         in++;
 
     start_pos = in;
@@ -423,7 +552,11 @@ next_token(void)
     while (*in != '\0' && *in != ' ' && *in != '\n')
         *t++ = *in++;
 
+    /*sleep(1000);*/
     *t = '\0';
+    /*printf("%p\n", in);*/
+    /*printf("token: %s\n", token);*/
+    /*die("todo");*/
     return start_pos != in;
 }
 
@@ -438,17 +571,50 @@ tos(void)
 
 
 void
+decompile(struct dict_elem *elem)
+{
+    u16 *cp = elem->code;
+    struct dict_elem *code = NULL;
+
+    printf(": %s ", elem->name);
+    for (;*cp != next; cp += 1) {
+        code = (void*)&memory[0] + *cp;
+        if (*cp == lit) {
+            cp += 1;
+            printf("%d", *cp);
+        } else {
+            /*printf("name: '%s', 0x%03x\n", code->name, *cp);*/
+            printf("%s", code->name);
+        }
+
+        printf(" ");
+    }
+
+    printf(";\n");
+}
+
+
+void
 print_dictionary(void)
 {
-    struct dict_elem *elem = dict;
+    struct dict_elem *elem = latest;
 
-    printf("dict\n");
+    if (elem)
+        printf("dict\n");
+    else
+        printf("dict is empty\n");
+
     while (elem) {
+        printf("    ");
+
+        u16 offset = (void*)elem - &memory[0];
+        printf("0x%03x, ", offset);
+
         if (elem->name == NULL)
             die("missing name");
-        printf("    %s\n", elem->name);
+        printf("%s\n", elem->name);
 
-        elem = elem->next;
+        elem = elem->prev;
     }
     printf("\n");
 }
