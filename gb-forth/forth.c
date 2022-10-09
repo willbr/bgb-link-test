@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "forth.h"
 
-void
+int
 main(void)
 {
     init();
@@ -9,18 +9,13 @@ main(void)
     printf("hello5\n\n");
 
     while (1) {
-        if (!str_cmp(token, "")) {
-            printf("# ");
-            gets(tib);
-            in = tib;
-            /*printf("tib: %s\n", tib);*/
-        }
-
         while (next_token())
             eval(token);
 
         printf("ok\n");
     }
-}
 
+    puts("goodbye");
+    return 0;
+}
 
