@@ -157,7 +157,7 @@ def link_gui(pipe, log_pipe):
 async def poll_pipe(conn, pipe):
     while pipe.poll():
         msg = pipe.recv()
-        l = list(msg.encode('ascii')) + [0]
+        l = list(msg.encode('latin')) + [0]
         conn.send_buffer.extend(l)
     await asyncio.sleep(0)
 

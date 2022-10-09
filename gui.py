@@ -41,6 +41,14 @@ class MsgApp:
 
         textbox.bind('<Return>', self.send_msg)
 
+        self.state = StringVar()
+        self.state.set('Bytes')
+        r1 = Radiobutton(lhs, text="Text", variable=self.state, val="Text")
+        r1.pack(ancho=W)
+        r2 = Radiobutton(lhs, text="Bytes", variable=self.state, val="Bytes")
+        r2.pack(ancho=W)
+
+
         pw.add(lhs)
 ################################
 
@@ -102,9 +110,15 @@ class MsgApp:
 
     def send_msg(self, e):
         msg = self.input_text.get()
+        state = self.state.get()
         self.msgs.insert(END, f"local: {msg}")
         self.msgs.yview(END)
-        self.main_pipe.send(msg)
+        if state == 'Bytes':
+            raw = bytearray(int(n, 16) for n in msg.split(' '))
+            new_msg = raw.decode('latin')
+            self.main_pipe.send(new_msg)
+        else:
+            self.main_pipe.send(msg)
         self.input_text.set("")
 
 
