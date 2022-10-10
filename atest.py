@@ -123,6 +123,7 @@ class BGBConnection:
                 self.send_buffer.pop(0)
                 self.state = self.connected
             else:
+                self.send_buffer.pop(0)
                 self.state = self.connected
                 # await asyncio.sleep(0.01)
                 await asyncio.sleep(0.1)
