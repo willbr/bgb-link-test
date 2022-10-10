@@ -79,7 +79,7 @@ class MsgApp:
 
 
     def connect(self):
-        self.p = p = Process(target=link_gui, args=(self.child_main, self.child_log))
+        self.p = p = Process(target=link_gui, args=(self.child_main, self.child_log, 'byte'))
         p.start()
 
         msg = self.main_pipe.recv()

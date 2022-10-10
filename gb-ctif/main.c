@@ -1,11 +1,14 @@
 #include <stdio.h>
 #include <gb/gb.h>
+#include <gb/bgb_emu.h>
 
 unsigned char rbyte = 0;
 unsigned short rshort = 0;
 
 void recv_byte(void);
 void recv_short(void);
+void send(uint8_t n);
+
 typedef void void_fn(void);
 
 void
@@ -15,7 +18,9 @@ main(void) {
     static unsigned char c;
     static void_fn *fn;
 
-    printf("ctif\n\n");
+    printf("ctif build: $02\n\n");
+    BGB_MESSAGE("");
+    BGB_MESSAGE("ctif");
 
     for (;;) {
         if (_io_status == IO_ERROR)
@@ -34,11 +39,10 @@ main(void) {
                 recv_short();
                 p = (unsigned char *)rshort;
 
-                printf("%d $%x\n", command, p);
-                printf("fetch:\n");
+                printf("@ $%hx $%x\n", command, p);
                 printf("addr: $%x\n", p);
-                printf("val:  $%x\n\n", *p);
-
+                printf("val:  $%hx\n\n", *p);
+                send(*p);
                 break;
 
             case 2: // 2 ! set
@@ -46,24 +50,22 @@ main(void) {
                 p = (unsigned char *)rshort;
                 recv_byte();
 
-                printf("%d $%x $%x\n", command, p, rbyte);
+                printf("! $%hx $%x $%hx\n", command, p, rbyte);
 
-                printf("store\n");
                 printf("addr: $%x\n", p);
 
-                printf("before: $%x\n", *p);
+                printf("before: $%hx\n", *p);
 
                 *p = rbyte;
-                printf("after: $%x\n\n", *p);
+                printf("after: $%hx\n\n", *p);
                 break;
 
             case 3: // 3 call
                 recv_short();
                 fn = (void_fn)rshort;
 
-                printf("%d $%x\n", command, fn);
+                printf("call $%hx $%x\n", command, fn);
 
-                printf("call:\n");
                 printf("addr: $%x\n\n", fn);
 
                 (*fn)();
@@ -104,3 +106,15 @@ recv_short(void) {
     rshort = (high << 8) + low;
 }
 
+void
+send(uint8_t n) {
+    _io_out = n;
+
+    send_byte();
+
+    while (_io_status == IO_SENDING);
+
+    if (_io_status != IO_IDLE) {
+        printf("\nsend_byte failed\n");
+    }
+}
