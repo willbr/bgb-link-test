@@ -111,7 +111,7 @@ class MsgApp:
     def send_msg(self, e):
         msg = self.input_text.get()
         state = self.state.get()
-        self.msgs.insert(END, f"local: {msg}")
+        self.msgs.insert(END, f"local:  {msg}")
         self.msgs.yview(END)
         if state == 'Bytes':
             raw = bytearray(int(n, 16) for n in msg.split(' '))

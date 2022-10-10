@@ -7,7 +7,9 @@ from bgb_link import *
 
 
 class BGBConnection:
-    def __init__(self):
+    def __init__(self, mode):
+        self.mode = 'byte'
+
         self.state = "handshake1"
         self.sock = None
         self.timestamp = 0
@@ -71,7 +73,7 @@ class BGBConnection:
 
 
     async def step(self):
-        # print(f"{self.state=}, {self.send_buffer=}")
+        print(f"{self.state=}, {self.send_buffer=}, {self.recv_buffer=}")
 
         if self.send_buffer and self.state == "connected":
             self.send(BGBMessage(bgb_cmd.sync1, self.send_buffer[0]))
@@ -81,7 +83,11 @@ class BGBConnection:
 
         msg = self.recv_msg()
         if msg == None:
+            print('no msg')
             return
+
+        if msg.cmd != bgb_cmd.sync3:
+            print(msg)
 
         if self.state == "handshake1":
             self.send(msg)
@@ -94,12 +100,17 @@ class BGBConnection:
                 self.default_handler(sock, msg)
         elif self.state == "connected":
             if msg.cmd == bgb_cmd.sync1:
-                if msg.b2 == 0:
-                    line = bytearray(self.recv_buffer).decode('ascii')
-                    self.msgs.append(line)
-                    self.recv_buffer = []
+                if self.mode == 'byte':
+                    self.msgs.append(msg.b2)
+                elif self.mode == 'text':
+                    if msg.b2 == 0:
+                        line = bytearray(self.recv_buffer).decode('latin')
+                        self.msgs.append(line)
+                        self.recv_buffer = []
+                    else:
+                        self.recv_buffer.append(msg.b2)
                 else:
-                    self.recv_buffer.append(msg.b2)
+                    assert False
                 self.send(BGBMessage(bgb_cmd.sync2))
             else:
                 self.default_handler(sock, msg)
@@ -147,8 +158,8 @@ class BGBConnection:
             pass
 
 
-def link_gui(pipe, log_pipe):
-    conn = BGBConnection()
+def link_gui(pipe, log_pipe, mode='text'):
+    conn = BGBConnection(mode)
     conn.connect()
     pipe.send("connected")
     asyncio.run(gui_loop(conn, pipe, log_pipe))
