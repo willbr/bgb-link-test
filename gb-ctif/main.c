@@ -1,4 +1,4 @@
-#include <stdio.h>
+// #include <stdio.h>
 #include <gb/gb.h>
 #include <gb/bgb_emu.h>
 
@@ -18,30 +18,30 @@ main(void) {
     static unsigned char c;
     static void_fn *fn;
 
-    printf("ctif build: $02\n\n");
     BGB_MESSAGE("");
-    BGB_MESSAGE("ctif");
+    BGB_MESSAGE("ctif build: $02");
+    BGB_MESSAGE("");
 
     for (;;) {
         if (_io_status == IO_ERROR)
-            printf("io_error\n");
+            BGB_printf("io_error\n");
 
-        printf("> ");
+        BGB_printf("> ");
 
         recv_byte();
         command = rbyte;
         switch (command) {
             case 0: // hack to ignore null char
-                printf(".");
+                BGB_printf(".");
                 break;
 
             case 1: // 1 @ fetch
                 recv_short();
                 p = (unsigned char *)rshort;
 
-                printf("@ $%hx $%x\n", command, p);
-                printf("addr: $%x\n", p);
-                printf("val:  $%hx\n\n", *p);
+                BGB_printf("@ $%hx $%x\n", command, p);
+                BGB_printf("addr: $%x\n", p);
+                BGB_printf("val:  $%hx\n\n", *p);
                 send(*p);
                 break;
 
@@ -50,29 +50,29 @@ main(void) {
                 p = (unsigned char *)rshort;
                 recv_byte();
 
-                printf("! $%hx $%x $%hx\n", command, p, rbyte);
+                BGB_printf("! $%hx $%x $%hx\n", command, p, rbyte);
 
-                printf("addr: $%x\n", p);
+                BGB_printf("addr: $%x\n", p);
 
-                printf("before: $%hx\n", *p);
+                BGB_printf("before: $%hx\n", *p);
 
                 *p = rbyte;
-                printf("after: $%hx\n\n", *p);
+                BGB_printf("after: $%hx\n\n", *p);
                 break;
 
             case 3: // 3 call
                 recv_short();
                 fn = (void_fn)rshort;
 
-                printf("call $%hx $%x\n", command, fn);
+                BGB_printf("call $%hx $%x\n", command, fn);
 
-                printf("addr: $%x\n\n", fn);
+                BGB_printf("addr: $%x\n\n", fn);
 
                 (*fn)();
                 break;
 
             default:
-                printf("unknown command: $%x\n", command);
+                BGB_printf("unknown command: $%x\n", command);
                 break;
         }
     }
@@ -90,7 +90,7 @@ recv_byte(void) {
             rbyte = _io_in;
             return;
         } else {
-            printf("io isn't idle\n");
+            BGB_printf("io isn't idle\n");
         }
     }
 }
@@ -115,6 +115,7 @@ send(uint8_t n) {
     while (_io_status == IO_SENDING);
 
     if (_io_status != IO_IDLE) {
-        printf("\nsend_byte failed\n");
+        BGB_printf("\nsend_byte failed\n");
     }
 }
+
