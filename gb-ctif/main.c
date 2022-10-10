@@ -6,51 +6,67 @@ unsigned short rshort = 0;
 
 void recv_byte(void);
 void recv_short(void);
+typedef void void_fn(void);
 
 void
 main(void) {
     static unsigned char command = 0;
     static unsigned char *p;
     static unsigned char c;
+    static void_fn *fn;
 
     printf("ctif\n\n");
 
     for (;;) {
-        // wait_vbl_done();
+        if (_io_status == IO_ERROR)
+            printf("io_error\n");
+
+        printf("> ");
+
         recv_byte();
         command = rbyte;
         switch (command) {
-            case 0:
+            case 0: // hack to ignore null char
+                printf(".");
                 break;
 
             case 1: // 1 @ fetch
-                printf("fetch: %d\n", command);
-
                 recv_short();
                 p = (unsigned char *)rshort;
-                printf("addr: $%x\n", p);
 
-                printf("val: $%x\n", *p);
+                printf("%d $%x\n", command, p);
+                printf("fetch:\n");
+                printf("addr: $%x\n", p);
+                printf("val:  $%x\n\n", *p);
+
                 break;
 
             case 2: // 2 ! set
-                printf("store command: %d\n", command);
-
                 recv_short();
                 p = (unsigned char *)rshort;
+                recv_byte();
+
+                printf("%d $%x $%x\n", command, p, rbyte);
+
+                printf("store\n");
                 printf("addr: $%x\n", p);
 
-                recv_byte();
-                printf("val: $%x\n", *p);
+                printf("before: $%x\n", *p);
 
                 *p = rbyte;
-                printf("val: $%x\n", *p);
+                printf("after: $%x\n\n", *p);
                 break;
 
-            case 3: // 3 c call
-                printf("call command: %d\n", command);
+            case 3: // 3 call
                 recv_short();
-                printf("addr: $%x\n", rshort);
+                fn = (void_fn)rshort;
+
+                printf("%d $%x\n", command, fn);
+
+                printf("call:\n");
+                printf("addr: $%x\n\n", fn);
+
+                (*fn)();
                 break;
 
             default:
@@ -65,12 +81,14 @@ void
 recv_byte(void) {
     while (1) {
         receive_byte();
+
         while (_io_status == IO_RECEIVING);
+
         if (_io_status == IO_IDLE) {
             rbyte = _io_in;
             return;
         } else {
-            printf("error\n");
+            printf("io isn't idle\n");
         }
     }
 }
