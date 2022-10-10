@@ -6,7 +6,7 @@ from atest import *
 from ctypes import windll
 from multiprocessing import Process, Pipe
 
-POLL_FREQ = 100 # ms
+POLL_FREQ = 16 # ms
 
 class MsgApp:
     def __init__(self, root):
@@ -114,7 +114,7 @@ class MsgApp:
         self.msgs.insert(END, f"local:  {msg}")
         self.msgs.yview(END)
         if state == 'Bytes':
-            raw = bytearray(int(n, 16) for n in msg.split(' '))
+            raw = bytearray(int(n, 16) for n in msg.strip().split(' '))
             new_msg = raw.decode('latin')
             self.main_pipe.send(new_msg)
         else:
