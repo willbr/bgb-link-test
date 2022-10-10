@@ -118,7 +118,7 @@ class MsgApp:
             new_msg = raw.decode('latin')
             self.main_pipe.send(new_msg)
         else:
-            self.main_pipe.send(msg)
+            self.main_pipe.send(msg + '\0')
         self.input_text.set("")
 
 
