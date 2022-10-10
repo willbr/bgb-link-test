@@ -5,12 +5,21 @@ from time import perf_counter
 
 from bgb_link import *
 
+from rich.console import Console
+from rich.traceback import install
+
+console = Console(markup=True)
+python_print = print
+print = console.print
+
+install(show_locals=True)
+
 
 class BGBConnection:
     def __init__(self, mode):
         self.mode = 'byte'
 
-        self.state = "handshake1"
+        self.state = self.handshake1
         self.sock = None
         self.timestamp = 0
 
@@ -56,7 +65,7 @@ class BGBConnection:
         msg = BGBMessage(*reply)
 
         if msg.cmd not in [bgb_cmd.sync3, bgb_cmd.joypad]:
-            self.log('r', f"{self.state:9s}", msg)
+            self.log(f"r {self.state.__name__:9s} {msg}")
 
         return msg
 
@@ -67,18 +76,65 @@ class BGBConnection:
 
         data = pack("<BBBBI", msg.cmd, msg.b2, msg.b3, msg.b4, self.timestamp)
         if msg.cmd not in [bgb_cmd.sync3, bgb_cmd.joypad]:
-            self.log('s', self.state, msg)
+            self.log(f"s {self.state.__name__:9s} {msg}")
         cnt = self.sock.send(data)
         assert cnt == 8
 
 
-    async def step(self):
-        print(f"{self.state=}, {self.send_buffer=}, {self.recv_buffer=}")
+    async def handshake1(self, msg):
+        self.send(msg)
+        self.state = self.handshake2
 
-        if self.send_buffer and self.state == "connected":
+    async def handshake2(self, msg):
+        if msg.cmd == bgb_cmd.sync2:
+            self.send(msg)
+            self.state = self.connected
+        else:
+            self.default_handler(sock, msg)
+
+    def recieve(self, msg):
+        if self.mode == 'byte':
+            self.msgs.append(msg.b2)
+        elif self.mode == 'text':
+            if msg.b2 == 0:
+                line = bytearray(self.recv_buffer).decode('latin')
+                self.msgs.append(line)
+                self.recv_buffer = []
+            else:
+                self.recv_buffer.append(msg.b2)
+        else:
+            assert False
+        self.send(BGBMessage(bgb_cmd.sync2))
+
+    async def connected(self, msg):
+        if msg.cmd == bgb_cmd.sync1:
+            self.recieve(msg)
+        else:
+            self.default_handler(sock, msg)
+
+    async def sending(self, msg):
+        if msg.cmd == bgb_cmd.sync1:
+            self.recieve(msg)
+        elif msg.cmd == bgb_cmd.sync2:
+            if msg.b2 == 0x66:
+                self.state = self.connected
+                await asyncio.sleep(0.01)
+            elif msg.b2 == 0x55:
+                self.send_buffer.pop(0)
+                self.state = self.connected
+            else:
+                self.state = self.connected
+                # await asyncio.sleep(0.01)
+                await asyncio.sleep(0.1)
+        else:
+            self.default_handler(sock, msg)
+
+    async def step(self):
+        if self.send_buffer and self.state == self.connected:
+            #print(f"{self.state=}, {self.send_buffer=}, {self.recv_buffer=}")
             self.send(BGBMessage(bgb_cmd.sync1, self.send_buffer[0]))
             self.last_sent = perf_counter()
-            self.state = "sending"
+            self.state = self.sending
             await asyncio.sleep(0)
 
         msg = self.recv_msg()
@@ -86,59 +142,14 @@ class BGBConnection:
             print('no msg')
             return
 
-        if msg.cmd != bgb_cmd.sync3:
-            print(msg)
-
-        if self.state == "handshake1":
-            self.send(msg)
-            self.state = "handshake2"
-        elif self.state == "handshake2":
-            if msg.cmd == bgb_cmd.sync2:
-                self.send(msg)
-                self.state = "connected"
-            else:
-                self.default_handler(sock, msg)
-        elif self.state == "connected":
-            if msg.cmd == bgb_cmd.sync1:
-                if self.mode == 'byte':
-                    self.msgs.append(msg.b2)
-                elif self.mode == 'text':
-                    if msg.b2 == 0:
-                        line = bytearray(self.recv_buffer).decode('latin')
-                        self.msgs.append(line)
-                        self.recv_buffer = []
-                    else:
-                        self.recv_buffer.append(msg.b2)
-                else:
-                    assert False
-                self.send(BGBMessage(bgb_cmd.sync2))
-            else:
-                self.default_handler(sock, msg)
-        elif self.state == "sending":
-            if msg.cmd == bgb_cmd.sync1:
-                assert False, msg
-            elif msg.cmd == bgb_cmd.sync2:
-                if msg.b2 == 0x66:
-                    self.state = "connected"
-                    await asyncio.sleep(0.01)
-                elif msg.b2 == 0x55:
-                    self.send_buffer.pop(0)
-                    self.state = "connected"
-                else:
-                    self.state = "connected"
-                    # await asyncio.sleep(0.01)
-                    await asyncio.sleep(0.1)
-            else:
-                self.default_handler(sock, msg)
-        else:
-            pass
+        await self.state(msg)
 
         await asyncio.sleep(0)
 
-        if self.state == "sending":
+        if self.state == self.sending:
             elapsed = perf_counter() - self.last_sent
             if elapsed > 0.01:
-                self.state = "connected"
+                self.state = self.connected
 
 
 
@@ -147,8 +158,10 @@ class BGBConnection:
         if cmd == bgb_cmd.status:
             self.send(msg)
         elif cmd == bgb_cmd.sync1:
+            print(f'default: {msg}')
             pass
         elif cmd == bgb_cmd.sync2:
+            #print(f'default: {msg}')
             pass
         elif cmd == bgb_cmd.sync3:
             self.send(msg)
