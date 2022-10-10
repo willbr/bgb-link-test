@@ -14,7 +14,7 @@ void
 main(void) {
     char cmd = 0;
 
-    printf("hello4\n\n");
+    printf("hello5\n\n");
 
     cmd = read_byte();
 
@@ -28,7 +28,7 @@ main(void) {
             break;
 
         default:
-            printf("unknown cmd: %d\n", cmd);
+            printf("unknown cmd: %hx\n", cmd);
     }
 }
 
@@ -37,7 +37,9 @@ void
 byte_loop(void) {
     while (1) {
         c = read_byte();
-        printf("%x ", c);
+        printf("%hx", c);
+        if (c == '\n')
+            printf("\n");
     }
 }
 
@@ -72,3 +74,4 @@ read_byte(void) {
 
     return _io_in;
 }
+
