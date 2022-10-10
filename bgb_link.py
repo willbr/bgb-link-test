@@ -130,7 +130,8 @@ def send(msg):
 
     data = pack("<BBBBI", msg.cmd, msg.b2, msg.b3, msg.b4, timestamp)
     if msg.cmd not in [bgb_cmd.sync3]:
-        log.send(f"s {msg}")
+        if log:
+            log.send(f"s {msg}")
     cnt = sock.send(data)
     assert cnt == 8
     last_sent = time()
@@ -148,12 +149,16 @@ def recv():
     except BlockingIOError as e:
         return None
 
+    if data == b'':
+        return None
+
     *reply, i1 = unpack("<BBBBI", data)
     # if i1:
         # timestamp = i1
     msg = BGBMessage(*reply)
     if msg.cmd not in [bgb_cmd.sync3, bgb_cmd.joypad]:
-        log.send(f"r {msg}")
+        if log:
+            log.send(f"r {msg}")
 
     return msg
 
@@ -260,4 +265,17 @@ def link_client(pipe, log_pipe):
             log.send(f"r {msg}")
             assert False, cmd
 
+
+def handshake(setblocking=False):
+    msg = recv()
+    assert msg.cmd == bgb_cmd.version
+    send_msg(bgb_cmd.version, 1, 4)
+
+    msg = recv()
+    assert msg.cmd == bgb_cmd.status
+    send(msg)
+
+    sock.setblocking(setblocking)
+
+    return msg
 
